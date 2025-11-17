@@ -1,0 +1,45 @@
+name: neuralens_ai_photo_editor
+description: High-end AI-powered photo editing app (Flutter + FastAPI backend)
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter: 
+    sdk: flutter
+  flutter_riverpod: ^2.4.0
+  dio: ^5.4.0
+  image_picker: ^1.0.7
+  cached_network_image: ^3.3.1
+  photo_view: ^0.14.0
+  lottie: ^3.0.0
+  shared_preferences: ^2.2.2
+  google_sign_in: ^6.2.1
+  flutter_facebook_auth: ^6.0.4
+  flutter_secure_storage: ^9.0.0
+  uuid: ^4.4.0
+  share_plus: ^7.0.0
+  image: ^4.1.7
+
+  # Placeholder for Firebase core/auth if later integrated
+  # firebase_core: ^2.0.0
+  # firebase_auth: ^4.0.0
+
+  # State management helpers
+  hooks_riverpod: ^2.4.0
+
+  # For sharing images (can be added later)
+  # share_plus: ^7.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/animations/loading.json
+    - assets/images/
