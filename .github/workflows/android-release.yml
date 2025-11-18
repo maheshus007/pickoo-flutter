@@ -50,36 +50,6 @@ jobs:
         flutter build web --release \
           --dart-define=BACKEND_URL=${{ secrets.BACKEND_URL || 'http://localhost:8000' }}
 
-    # Setup Python for backend (optional - for integration tests)
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: 'pip'
-
-    - name: Install Python dependencies
-      run: |
-        cd ../pickoo-backend
-        pip install -r requirements.txt
-      continue-on-error: true
-
-    # Start backend for integration testing (optional)
-    - name: Start Backend Server
-      env:
-        PICKOO_PROCESSOR_MODE: ${{ vars.PROCESSOR_MODE || 'existing' }}
-        PICKOO_GEMINI_BASE_URL: ${{ vars.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/' }}
-        PICKOO_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        PICKOO_GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.0-flash-exp' }}
-        PICKOO_MONGO_URI: ${{ secrets.MONGO_URI || 'mongodb://localhost:27017/pickoo' }}
-        PICKOO_JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        PICKOO_STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-        PICKOO_STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-      run: |
-        cd ../pickoo-backend
-        python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
-        sleep 5
-      continue-on-error: true
-
     # Android Build Process
     - name: Decode Android Keystore
       if: github.ref == 'refs/heads/main'
