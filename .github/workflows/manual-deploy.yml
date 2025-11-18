@@ -1,0 +1,116 @@
+name: Manual Deploy to Play Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: 'Deployment track'
+        required: true
+        default: 'internal'
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+      version_name:
+        description: 'Version name (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+      rollout_percentage:
+        description: 'Rollout percentage for production (0-100)'
+        required: false
+        default: '100'
+
+jobs:
+  manual-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.0'
+        channel: 'stable'
+        cache: true
+
+    - name: Install dependencies
+      run: flutter pub get
+
+    - name: Decode Android Keystore
+      run: |
+        echo "${{ secrets.JAVA_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+
+    - name: Create key.properties
+      run: |
+        cat <<EOF > android/key.properties
+        storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+        keyPassword=${{ secrets.KEY_ALIAS_PASSWORD }}
+        keyAlias=${{ secrets.KEY_ALIAS }}
+        storeFile=upload-keystore.jks
+        EOF
+
+    - name: Build Android App Bundle
+      run: |
+        flutter build appbundle --release \
+          --dart-define=BACKEND_URL=${{ secrets.BACKEND_URL }} \
+          --build-number=${{ github.run_number }} \
+          --build-name=${{ github.event.inputs.version_name }}
+
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+
+    - name: Install Fastlane
+      run: |
+        cd android
+        gem install fastlane -NV
+
+    - name: Create Play Store Service Account JSON
+      run: |
+        mkdir -p android/fastlane
+        echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > android/fastlane/play-account.json
+
+    - name: Deploy to Play Store
+      working-directory: android
+      env:
+        SUPPLY_PACKAGE_NAME: ${{ secrets.PACKAGE_NAME }}
+      run: |
+        if [ "${{ github.event.inputs.track }}" = "production" ]; then
+          fastlane supply \
+            --aab ../build/app/outputs/bundle/release/app-release.aab \
+            --track production \
+            --rollout ${{ github.event.inputs.rollout_percentage }} \
+            --json_key fastlane/play-account.json \
+            --package_name ${{ secrets.PACKAGE_NAME }}
+        else
+          fastlane supply \
+            --aab ../build/app/outputs/bundle/release/app-release.aab \
+            --track ${{ github.event.inputs.track }} \
+            --json_key fastlane/play-account.json \
+            --package_name ${{ secrets.PACKAGE_NAME }}
+        fi
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f android/app/upload-keystore.jks
+        rm -f android/key.properties
+        rm -f android/fastlane/play-account.json
+
+    - name: Deployment Summary
+      run: |
+        echo "🚀 Deployed Pickoo AI to Google Play Store"
+        echo "📦 Track: ${{ github.event.inputs.track }}"
+        echo "📌 Version: ${{ github.event.inputs.version_name }} (Build #${{ github.run_number }})"
+        echo "📊 Rollout: ${{ github.event.inputs.rollout_percentage }}%"

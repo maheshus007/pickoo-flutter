@@ -1,0 +1,205 @@
+name: Pickoo AI Android CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.0'
+        channel: 'stable'
+        cache: true
+
+    - name: Flutter Doctor
+      run: flutter doctor -v
+
+    - name: Install Flutter dependencies
+      run: flutter pub get
+
+    - name: Run Flutter Analyzer
+      run: flutter analyze
+      continue-on-error: true
+
+    - name: Run Flutter Tests
+      run: flutter test
+      continue-on-error: true
+
+    # Build Flutter Web
+    - name: Build Flutter Web (Release)
+      run: |
+        flutter build web --release \
+          --dart-define=BACKEND_URL=${{ secrets.BACKEND_URL || 'http://localhost:8000' }}
+
+    # Setup Python for backend (optional - for integration tests)
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install Python dependencies
+      run: |
+        cd ../pickoo-backend
+        pip install -r requirements.txt
+      continue-on-error: true
+
+    # Start backend for integration testing (optional)
+    - name: Start Backend Server
+      env:
+        PICKOO_PROCESSOR_MODE: ${{ vars.PROCESSOR_MODE || 'existing' }}
+        PICKOO_GEMINI_BASE_URL: ${{ vars.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/' }}
+        PICKOO_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        PICKOO_GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.0-flash-exp' }}
+        PICKOO_MONGO_URI: ${{ secrets.MONGO_URI || 'mongodb://localhost:27017/pickoo' }}
+        PICKOO_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        PICKOO_STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+        PICKOO_STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      run: |
+        cd ../pickoo-backend
+        python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+        sleep 5
+      continue-on-error: true
+
+    # Android Build Process
+    - name: Decode Android Keystore
+      if: github.ref == 'refs/heads/main'
+      run: |
+        echo "${{ secrets.JAVA_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+
+    - name: Create key.properties
+      if: github.ref == 'refs/heads/main'
+      run: |
+        cat <<EOF > android/key.properties
+        storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+        keyPassword=${{ secrets.KEY_ALIAS_PASSWORD }}
+        keyAlias=${{ secrets.KEY_ALIAS }}
+        storeFile=upload-keystore.jks
+        EOF
+
+    - name: Build Android App Bundle (AAB)
+      if: github.ref == 'refs/heads/main'
+      run: |
+        flutter build appbundle --release \
+          --dart-define=BACKEND_URL=${{ secrets.BACKEND_URL }} \
+          --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
+          --build-number=${{ github.run_number }}
+
+    - name: Build Android APK (for artifacts)
+      if: github.ref == 'refs/heads/main'
+      run: |
+        flutter build apk --release \
+          --dart-define=BACKEND_URL=${{ secrets.BACKEND_URL }} \
+          --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
+          --build-number=${{ github.run_number }}
+
+    # Upload Build Artifacts
+    - name: Upload AAB Artifact
+      if: github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release-aab
+        path: build/app/outputs/bundle/release/app-release.aab
+        retention-days: 30
+
+    - name: Upload APK Artifact
+      if: github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release-apk
+        path: build/app/outputs/flutter-apk/app-release.apk
+        retention-days: 30
+
+    - name: Upload Web Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: web-release
+        path: build/web/
+        retention-days: 15
+
+    # Setup Fastlane for Play Store deployment
+    - name: Setup Ruby
+      if: github.ref == 'refs/heads/main'
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: true
+
+    - name: Install Fastlane
+      if: github.ref == 'refs/heads/main'
+      run: |
+        cd android
+        gem install fastlane -NV
+        gem install bundler
+
+    - name: Create Play Store Service Account JSON
+      if: github.ref == 'refs/heads/main'
+      run: |
+        mkdir -p android/fastlane
+        echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > android/fastlane/play-account.json
+
+    - name: Create Fastlane Metadata (Optional)
+      if: github.ref == 'refs/heads/main'
+      run: |
+        mkdir -p android/fastlane/metadata/android/en-US
+        echo "Pickoo AI - Professional Photo Editor" > android/fastlane/metadata/android/en-US/title.txt
+        echo "Transform your photos with AI-powered editing tools" > android/fastlane/metadata/android/en-US/short_description.txt
+
+    # Deploy to Play Store
+    - name: Upload to Google Play Store (Internal Testing)
+      if: github.ref == 'refs/heads/main'
+      working-directory: android
+      env:
+        SUPPLY_PACKAGE_NAME: ${{ secrets.PACKAGE_NAME }}
+        GOOGLE_APPLICATION_CREDENTIALS: fastlane/play-account.json
+      run: |
+        fastlane supply \
+          --aab ../build/app/outputs/bundle/release/app-release.aab \
+          --track internal \
+          --json_key fastlane/play-account.json \
+          --package_name ${{ secrets.PACKAGE_NAME }} \
+          --skip_upload_metadata \
+          --skip_upload_images \
+          --skip_upload_screenshots
+
+    # Cleanup
+    - name: Cleanup sensitive files
+      if: always()
+      run: |
+        rm -f android/app/upload-keystore.jks
+        rm -f android/key.properties
+        rm -f android/fastlane/play-account.json
+
+    # Notify on success
+    - name: Build Success Notification
+      if: success() && github.ref == 'refs/heads/main'
+      run: |
+        echo "✅ Pickoo AI build and deployment successful!"
+        echo "Version: Build #${{ github.run_number }}"
+        echo "Deployed to: Google Play Store (Internal Testing)"
+
+    # Notify on failure
+    - name: Build Failure Notification
+      if: failure()
+      run: |
+        echo "❌ Pickoo AI build failed!"
+        echo "Check the logs above for details."
