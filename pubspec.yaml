@@ -24,6 +24,10 @@ dependencies:
   share_plus: ^7.0.0
   image: ^4.1.7
   flutter_image_compress: ^2.3.0  # Fast native image compression
+  url_launcher: ^6.2.5  # For opening payment URLs
+  webview_flutter: ^4.7.0  # For in-app payment flow
+  google_mobile_ads: ^5.1.0  # Google AdMob integration for monetization
+  in_app_purchase: ^3.1.13  # Google Play Billing & App Store in-app purchases
 
   # Placeholder for Firebase core/auth if later integrated
   # firebase_core: ^2.0.0

@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/subscription_plan.dart';
+import '../services/api_service.dart';
+import 'auth_provider.dart';
+import 'tool_provider.dart';
 
 class SubscriptionState {
   final SubscriptionPlan plan;
@@ -40,15 +43,49 @@ class SubscriptionState {
 class SubscriptionNotifier extends Notifier<SubscriptionState> {
   @override
   SubscriptionState build() {
-    // Default free plan.
+    // Load subscription status from backend
+    _loadSubscriptionStatus();
+    // Default free plan while loading
     return const SubscriptionState(plan: PlansRegistry.free);
+  }
+
+  Future<void> _loadSubscriptionStatus() async {
+    try {
+      final auth = ref.read(authProvider);
+      if (auth.isAuthenticated && auth.userId != null) {
+        final api = ref.read(apiServiceProvider);
+        final status = await api.getSubscriptionStatus(auth.userId!);
+        
+        if (status != null) {
+          // Parse the backend response
+          final planId = status['plan_id'] as String? ?? 'free';
+          final usedImages = status['used_images'] as int? ?? 0;
+          final purchasedAtStr = status['purchased_at'] as String?;
+          
+          final plan = PlansRegistry.byId(planId);
+          final purchasedAt = purchasedAtStr != null 
+              ? DateTime.tryParse(purchasedAtStr) 
+              : null;
+          
+          state = SubscriptionState(
+            plan: plan,
+            purchasedAt: purchasedAt,
+            usedImages: usedImages,
+          );
+          
+          print('[SubscriptionProvider] Loaded status: plan=$planId, used=$usedImages');
+        }
+      }
+    } catch (e) {
+      print('[SubscriptionProvider] Failed to load subscription status: $e');
+    }
   }
 
   void purchase(SubscriptionPlan plan) {
     state = SubscriptionState(plan: plan, purchasedAt: DateTime.now());
   }
 
-  void recordUsage() {
+  Future<void> recordUsage() async {
     if (state.isExpired) {
       state = state.copyWith(error: 'Plan expired');
       return;
@@ -57,7 +94,21 @@ class SubscriptionNotifier extends Notifier<SubscriptionState> {
       state = state.copyWith(error: 'Image quota reached');
       return;
     }
+    
+    // Update local state
     state = state.copyWith(usedImages: state.usedImages + 1, error: null);
+    
+    // Record usage in backend
+    try {
+      final auth = ref.read(authProvider);
+      if (auth.isAuthenticated && auth.userId != null) {
+        final api = ref.read(apiServiceProvider);
+        await api.recordUsage(auth.userId!);
+      }
+    } catch (e) {
+      // Log but don't block user if backend update fails
+      print('[SubscriptionProvider] Failed to record usage in backend: $e');
+    }
   }
 
   void resetError() => state = state.copyWith(error: null);

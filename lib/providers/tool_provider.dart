@@ -5,6 +5,8 @@ import '../models/tool.dart';
 import '../services/api_service.dart';
 import '../services/gallery_service.dart';
 import '../models/gallery_item.dart';
+import '../config/app_config.dart';
+import '../utils/error_display_helper.dart';
 import 'subscription_provider.dart';
 
 /// Holds state for current editing session.
@@ -52,12 +54,8 @@ class ToolState {
   bool get hasResult => result != null;
 }
 
-// Backend URL is injected at build time via --dart-define=BACKEND_URL=...
-// If not provided, the app falls back to localhost:8000 for local development.
-const String kBackendUrl = String.fromEnvironment('BACKEND_URL', defaultValue: 'http://localhost:8000');
-
 final apiServiceProvider = Provider<ApiService>((ref) {
-  return ApiService(kBackendUrl);
+  return ApiService(AppConfig.backendUrl);
 });
 
 final toolStateProvider = NotifierProvider<ToolStateNotifier, ToolState>(() {
@@ -83,11 +81,47 @@ class GalleryNotifier extends Notifier<List<GalleryItem>> {
     state = items;
   }
 
+  /// Add new item to gallery with automatic quota management
   Future<void> add(String tool, Uint8List bytes) async {
-    final item = await _service.create(tool, bytes);
-    // Prepend the new item so latest appears first in gallery
-    state = [item, ...state];
-    await _service.saveAll(state);
+    try {
+      final item = await _service.create(tool, bytes);
+      // Prepend the new item so latest appears first in gallery
+      final newState = [item, ...state];
+      
+      // Save to storage (will auto-cleanup if needed)
+      await _service.saveAll(newState);
+      
+      // Update state only after successful save
+      state = newState;
+      
+    } catch (e) {
+      // Handle QuotaExceededError gracefully
+      if (e.toString().contains('QuotaExceededError') || 
+          e.toString().contains('exceeded the quota')) {
+        
+        // Log the error
+        final errorLog = ErrorDisplayHelper.formatErrorLog(
+          error: e.toString(),
+          tool: tool,
+          operation: 'save_to_gallery',
+          context: {
+            'current_items': state.length,
+            'max_items': 20,
+          },
+        );
+        // ignore: avoid_print
+        print(errorLog);
+        
+        // Reload gallery (emergency cleanup already happened in service)
+        await _load();
+        
+        // Re-throw with user-friendly message
+        throw Exception('Storage quota exceeded. Gallery has been reduced to 10 most recent images. Please clear cache in settings to free up space.');
+      }
+      
+      // For other errors, just rethrow
+      rethrow;
+    }
   }
 
   Future<void> remove(String id) async {
@@ -97,7 +131,12 @@ class GalleryNotifier extends Notifier<List<GalleryItem>> {
 
   Future<void> clear() async {
     state = [];
-    await _service.saveAll(state);
+    await _service.clearAll();
+  }
+
+  /// Get storage statistics
+  Future<Map<String, dynamic>> getStorageStats() async {
+    return await _service.getStorageStats();
   }
 }
 
@@ -180,13 +219,46 @@ class ToolStateNotifier extends Notifier<ToolState> {
       state = state.copyWith(result: bytes, processing: false);
       // ignore: avoid_print
       print('[ToolState] Process succeeded tool=${tool.id} bytes=${bytes.length}');
-      // Persist to gallery
-  await ref.read(galleryProvider.notifier).add(tool.id, bytes);
+      
+      // Persist to gallery (with quota error handling)
+      try {
+        await ref.read(galleryProvider.notifier).add(tool.id, bytes);
+      } catch (galleryError) {
+        // Log gallery save error but don't fail the entire process
+        final galleryErrorLog = ErrorDisplayHelper.formatErrorLog(
+          error: galleryError.toString(),
+          tool: tool.id,
+          operation: 'save_to_gallery',
+          context: {
+            'result_bytes': bytes.length,
+          },
+        );
+        // ignore: avoid_print
+        print(galleryErrorLog);
+        
+        // Show user-friendly error message but keep the result
+        // User can still download/share even if gallery save failed
+        state = state.copyWith(
+          error: 'Image processed successfully, but gallery save failed: ${galleryError.toString()}',
+        );
+      }
+      
       // Record usage
   ref.read(subscriptionProvider.notifier).recordUsage();
     } catch (e) {
+      // Format error with context for better debugging
+      final errorLog = ErrorDisplayHelper.formatErrorLog(
+        error: e.toString(),
+        tool: tool.id,
+        operation: 'process_image',
+        context: {
+          'has_original': state.original != null,
+          'original_bytes': state.originalBytes?.length ?? 0,
+        },
+      );
       // ignore: avoid_print
-      print('[ToolState] Process failed tool=${tool.id} error=$e');
+      print(errorLog);
+      
       state = state.copyWith(error: e.toString(), processing: false);
     }
   }
@@ -205,6 +277,10 @@ class ToolStateNotifier extends Notifier<ToolState> {
       // Revert to original (no result)
       state = state.copyWith(result: null, error: null);
     }
+  }
+
+  void clearError() {
+    state = state.copyWith(error: null);
   }
 
   void reset() {

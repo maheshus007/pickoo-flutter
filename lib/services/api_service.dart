@@ -250,6 +250,69 @@ class ApiService {
     }
   }
 
+  /// Verify Google Play purchase with backend
+  Future<Map<String, dynamic>> verifyGooglePlayPurchase({
+    required String userId,
+    required String purchaseToken,
+    required String productId,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/subscription/verify-google-play',
+        data: {
+          'user_id': userId,
+          'purchase_token': purchaseToken,
+          'product_id': productId,
+        },
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'error': _extractMessage(e),
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// Record image processing usage in backend
+  Future<void> recordUsage(String userId) async {
+    try {
+      await _dio.post(
+        '/subscription/record_usage',
+        data: {'user_id': userId},
+      );
+      debugPrint('[API] Usage recorded for user: $userId');
+    } on DioException catch (e) {
+      debugPrint('[API ERROR] Failed to record usage: ${_extractMessage(e)}');
+      // Don't throw - usage tracking shouldn't block the user
+    } catch (e) {
+      debugPrint('[API ERROR] Failed to record usage: $e');
+    }
+  }
+
+  /// Get subscription status from backend
+  Future<Map<String, dynamic>?> getSubscriptionStatus(String userId) async {
+    try {
+      final response = await _dio.get(
+        '/subscription/status',
+        queryParameters: {'user_id': userId},
+      );
+      debugPrint('[API] Subscription status fetched for user: $userId');
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      debugPrint('[API ERROR] Failed to get subscription status: ${_extractMessage(e)}');
+      return null;
+    } catch (e) {
+      debugPrint('[API ERROR] Failed to get subscription status: $e');
+      return null;
+    }
+  }
+
   String _extractMessage(DioException e) {
     if (e.response?.data is Map && e.response?.data['detail'] != null) {
       return e.response?.data['detail'] as String;
