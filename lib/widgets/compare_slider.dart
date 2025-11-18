@@ -62,7 +62,9 @@ class _CompareSliderState extends State<CompareSlider> with SingleTickerProvider
         },
         onHorizontalDragEnd: (details) {
           // Snap to near edges if close.
-          if (_position < 0.08) _animateTo(0.0); else if (_position > 0.92) _animateTo(1.0);
+          if (_position < 0.08) {
+            _animateTo(0.0);
+          } else if (_position > 0.92) _animateTo(1.0);
         },
         child: Stack(children: [
           // Show AFTER full-size as baseline.

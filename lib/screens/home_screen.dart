@@ -65,30 +65,6 @@ class HomeScreen extends ConsumerWidget {
               final file = await File(filePath).writeAsBytes(bytes, flush: true);
               await notifier.setOriginal(XFile(file.path));
             }),
-            // Raw mode toggle (binary response instead of base64 JSON) for performance.
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0, bottom: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Switch(
-                    value: toolState.rawMode,
-                    onChanged: (_) => ref.read(toolStateProvider.notifier).toggleRawMode(),
-                    activeColor: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Raw mode',
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
-                  const SizedBox(width: 8),
-                  if (toolState.rawMode)
-                    const Text('PNG/JPEG bytes', style: TextStyle(color: Colors.white24, fontSize: 11))
-                  else
-                    const Text('Base64 JSON', style: TextStyle(color: Colors.white24, fontSize: 11)),
-                ],
-              ),
-            ),
             // Stable image area: keeps layout position fixed using AnimatedSwitcher + AspectRatio.
             if (toolState.originalBytes != null)
               Padding(
@@ -406,7 +382,7 @@ class _HeaderSection extends StatelessWidget {
       children: [
         Text('Welcome!', style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white)),
         const SizedBox(height: 8),
-        Text('Upload a photo, choose an AI tool and let NeuraLens enhance it.', style: const TextStyle(color: Colors.white70)),
+        const Text('Upload a photo, choose an AI tool and let NeuraLens enhance it.', style: TextStyle(color: Colors.white70)),
         const SizedBox(height: 16),
         Row(
           children: [

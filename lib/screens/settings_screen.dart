@@ -53,9 +53,9 @@ class SettingsScreen extends ConsumerWidget {
             },
           ),
           const Divider(),
-            ListTile(
-              title: const Text('App Version', style: TextStyle(color: Colors.white)),
-              subtitle: Text(appVersion, style: const TextStyle(color: Colors.white54)),
+            const ListTile(
+              title: Text('App Version', style: TextStyle(color: Colors.white)),
+              subtitle: Text(appVersion, style: TextStyle(color: Colors.white54)),
             ),
         ],
       ),
