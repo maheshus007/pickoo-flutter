@@ -1,4 +1,4 @@
-name: neuralens_ai_photo_editor
+name: pickoo_ai_photo_editor
 description: High-end AI-powered photo editing app (Flutter + FastAPI backend)
 publish_to: 'none'
 version: 0.1.0

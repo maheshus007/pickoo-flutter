@@ -22,7 +22,7 @@ class AppConfig {
   /// Override at compile time: flutter run --dart-define=API_BASE_URL=http://localhost:8000
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://pickoo-backend-new-env.ap-south-1.elasticbeanstalk.com',
+    defaultValue: 'http://pickoo-backend-new-env.eba-87fqh8rp.ap-south-1.elasticbeanstalk.com',
   );
 
   /// API timeout duration in seconds
