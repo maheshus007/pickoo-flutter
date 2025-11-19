@@ -8,6 +8,7 @@ import '../models/tool.dart';
 import '../services/api_service.dart';
 import '../services/gallery_service.dart';
 import '../models/gallery_item.dart';
+import '../config/app_config.dart';
 import 'subscription_provider.dart';
 
 /// Holds state for current editing session.
@@ -60,8 +61,7 @@ class ToolState {
 }
 
 final apiServiceProvider = Provider<ApiService>((ref) {
-  // In production make this configurable or remote.
-  return ApiService('http://localhost:8000');
+  return ApiService(AppConfig.apiBaseUrl);
 });
 
 final toolStateProvider = NotifierProvider<ToolStateNotifier, ToolState>(() {

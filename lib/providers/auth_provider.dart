@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../config/app_config.dart';
 
 class AuthState {
   final String? accessToken;
@@ -34,7 +35,11 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref){
 
 class AuthNotifier extends StateNotifier<AuthState>{
   AuthNotifier(): super(const AuthState());
-  final Dio _dio = Dio(BaseOptions(baseUrl: 'http://127.0.0.1:8000'));
+  final Dio _dio = Dio(BaseOptions(
+    baseUrl: AppConfig.apiBaseUrl,
+    connectTimeout: Duration(milliseconds: AppConfig.connectTimeoutMs),
+    receiveTimeout: Duration(milliseconds: AppConfig.receiveTimeoutMs),
+  ));
   final AuthService _google = AuthService();
 
   Future<void> init() async {
