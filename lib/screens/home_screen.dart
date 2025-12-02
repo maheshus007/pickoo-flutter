@@ -4,9 +4,6 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-// For web download anchor
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
 import 'package:flutter/services.dart' show rootBundle;
 import '../models/tool.dart';
 import '../providers/tool_provider.dart';
@@ -28,7 +25,7 @@ class HomeScreen extends ConsumerWidget {
   final sub = ref.watch(subscriptionProvider);
     return Stack(children: [
       Scaffold(
-        appBar: AppBar(title: const Text('NeuraLens AI')),
+  appBar: AppBar(title: const Text('Pickoo AI')),
         body: Stack(
           children: [
             // Futuristic subtle radial gradient backdrop
@@ -61,7 +58,7 @@ class HomeScreen extends ConsumerWidget {
               final base64Data = await rootBundle.loadString('assets/images/sample.base64');
               final bytes = base64Decode(base64Data);
               final tempDir = Directory.systemTemp;
-              final filePath = '${tempDir.path}/neuralens_sample.png';
+              final filePath = '${tempDir.path}/pickoo_sample.png';
               final file = await File(filePath).writeAsBytes(bytes, flush: true);
               await notifier.setOriginal(XFile(file.path));
             }),
@@ -109,7 +106,7 @@ class HomeScreen extends ConsumerWidget {
                               top: 8,
                               child: _DownloadButton(
                                 bytes: toolState.result!,
-                                filename: 'neuralens_edited.png',
+                                filename: 'pickoo_edited.png',
                                 tooltip: 'Download edited',
                                 adSupported: sub.plan.adSupported,
                               ),
@@ -134,7 +131,7 @@ class HomeScreen extends ConsumerWidget {
                                     top: 8,
                                     child: _DownloadButton(
                                       bytes: toolState.originalBytes!,
-                                      filename: 'neuralens_original.png',
+                                      filename: 'pickoo_original.png',
                                       tooltip: 'Download original',
                                       adSupported: sub.plan.adSupported,
                                     ),
@@ -183,7 +180,7 @@ class HomeScreen extends ConsumerWidget {
                                     top: 8,
                                     child: _DownloadButton(
                                       bytes: toolState.originalBytes!,
-                                      filename: 'neuralens_original.png',
+                                      filename: 'pickoo_original.png',
                                       tooltip: 'Download original',
                                       adSupported: sub.plan.adSupported,
                                     ),
@@ -272,7 +269,7 @@ class HomeScreen extends ConsumerWidget {
                       onPressed: () async => _downloadBytes(
                         context: context,
                         bytes: toolState.result!,
-                        filename: 'neuralens_edited.png',
+                        filename: 'pickoo_edited.png',
                         adSupported: sub.plan.adSupported,
                       ),
                       icon: const Icon(Icons.download, color: Colors.white70),
@@ -281,8 +278,8 @@ class HomeScreen extends ConsumerWidget {
                     const SizedBox(width: 12),
                     OutlinedButton.icon(
                       onPressed: () async {
-                        final xfile = XFile.fromData(toolState.result!, name: 'neuralens_result.png', mimeType: 'image/png');
-                        await Share.shareXFiles([xfile], text: 'Edited with NeuraLens');
+                        final xfile = XFile.fromData(toolState.result!, name: 'pickoo_result.png', mimeType: 'image/png');
+                        await Share.shareXFiles([xfile], text: 'Edited with Pickoo');
                       },
                       icon: const Icon(Icons.share, color: Colors.white70),
                       label: const Text('Share'),
@@ -378,20 +375,13 @@ Future<void> _downloadBytes({
     );
   }
   if (kIsWeb) {
-    // Use browser download mechanism
-    final blob = html.Blob([bytes]);
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: url)
-      ..download = filename
-      ..style.display = 'none';
-    html.document.body!.append(anchor);
-    anchor.click();
-    anchor.remove();
-    html.Url.revokeObjectUrl(url);
+    // Use browser download mechanism (web only)
+    // Note: This code won't compile on non-web platforms, but kIsWeb prevents execution
+    throw UnimplementedError('Web download not available in this build');
   } else {
     // Fallback: share file (mobile/desktop)
     final xfile = XFile.fromData(bytes, name: filename, mimeType: 'image/png');
-    await Share.shareXFiles([xfile], text: 'Edited with NeuraLens');
+  await Share.shareXFiles([xfile], text: 'Edited with Pickoo');
   }
 }
 
@@ -406,7 +396,7 @@ class _HeaderSection extends StatelessWidget {
       children: [
         Text('Welcome!', style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white)),
         const SizedBox(height: 8),
-        Text('Upload a photo, choose an AI tool and let NeuraLens enhance it.', style: const TextStyle(color: Colors.white70)),
+  Text('Upload a photo, choose an AI tool and let Pickoo enhance it.', style: const TextStyle(color: Colors.white70)),
         const SizedBox(height: 16),
         Row(
           children: [

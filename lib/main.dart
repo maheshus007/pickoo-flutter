@@ -10,18 +10,18 @@ import 'screens/settings_screen.dart';
 import 'widgets/bottom_nav.dart';
 import 'utils/theme.dart';
 
-/// Entry point of NeuraLens AI Photo Editor.
+/// Entry point of Pickoo AI Photo Editor.
 void main() {
-  runApp(const ProviderScope(child: NeuraLensApp()));
+  runApp(const ProviderScope(child: PickooApp()));
 }
 
-class NeuraLensApp extends ConsumerStatefulWidget {
-  const NeuraLensApp({super.key});
+class PickooApp extends ConsumerStatefulWidget {
+  const PickooApp({super.key});
   @override
-  ConsumerState<NeuraLensApp> createState() => _NeuraLensAppState();
+  ConsumerState<PickooApp> createState() => _PickooAppState();
 }
 
-class _NeuraLensAppState extends ConsumerState<NeuraLensApp> {
+class _PickooAppState extends ConsumerState<PickooApp> {
   int _index = 0;
   final _screens = const [
     HomeScreen(),
@@ -35,7 +35,7 @@ class _NeuraLensAppState extends ConsumerState<NeuraLensApp> {
     final themeMode = ref.watch(themeModeProvider);
     final auth = ref.watch(authProvider);
     return MaterialApp(
-      title: 'NeuraLens AI',
+      title: 'Pickoo AI',
       themeMode: themeMode,
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(),

@@ -8,11 +8,11 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:neuralens_ai_photo_editor/main.dart';
+import 'package:pickoo_ai_photo_editor/main.dart';
 
 void main() {
   testWidgets('App smoke test: primary UI elements render', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: NeuraLensApp()));
+  await tester.pumpWidget(const ProviderScope(child: PickooApp()));
     // Expect core call-to-action buttons from header section.
     expect(find.text('Select Photo'), findsOneWidget);
     expect(find.text('Use Sample'), findsOneWidget);
