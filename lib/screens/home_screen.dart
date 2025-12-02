@@ -13,7 +13,8 @@ import '../widgets/neon_card.dart';
 import '../widgets/section_title.dart';
 import '../providers/subscription_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import '../models/subscription_plan.dart';
+// import '../models/subscription_plan.dart';
+import '../services/payment_service.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -62,30 +63,7 @@ class HomeScreen extends ConsumerWidget {
               final file = await File(filePath).writeAsBytes(bytes, flush: true);
               await notifier.setOriginal(XFile(file.path));
             }),
-            // Raw mode toggle (binary response instead of base64 JSON) for performance.
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0, bottom: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Switch(
-                    value: toolState.rawMode,
-                    onChanged: (_) => ref.read(toolStateProvider.notifier).toggleRawMode(),
-                    activeColor: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Raw mode',
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
-                  const SizedBox(width: 8),
-                  if (toolState.rawMode)
-                    const Text('PNG/JPEG bytes', style: TextStyle(color: Colors.white24, fontSize: 11))
-                  else
-                    const Text('Base64 JSON', style: TextStyle(color: Colors.white24, fontSize: 11)),
-                ],
-              ),
-            ),
+            // Raw mode option removed per request.
             // Stable image area: keeps layout position fixed using AnimatedSwitcher + AspectRatio.
             if (toolState.originalBytes != null)
               Padding(
@@ -300,15 +278,22 @@ class HomeScreen extends ConsumerWidget {
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: Colors.black.withOpacity(0.85)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Ad Placeholder', style: TextStyle(color: Colors.white60)),
-                TextButton(
-                  onPressed: () => ref.read(subscriptionProvider.notifier).purchase(PlansRegistry.week100),
-                  child: const Text('Upgrade', style: TextStyle(color: Colors.white)),
-                ),
-              ],
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () async {
+                  await PaymentService.startGPayUpi(
+                    context: context,
+                    pa: 'maheshus007@icici',
+                    pn: 'Pickoo AI',
+                    am: '99.00',
+                    tn: 'Pickoo Weekly Subscription',
+                    tid: 'pickoo-${DateTime.now().millisecondsSinceEpoch}',
+                    currency: 'INR',
+                  );
+                },
+                child: const Text('Upgrade', style: TextStyle(color: Colors.white)),
+              ),
             ),
           ),
         ),

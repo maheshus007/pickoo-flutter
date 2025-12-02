@@ -22,6 +22,7 @@ dependencies:
   uuid: ^4.4.0
   share_plus: ^7.0.0
   image: ^4.1.7
+  url_launcher: ^6.3.0
 
   # Placeholder for Firebase core/auth if later integrated
   # firebase_core: ^2.0.0
