@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Google Play Billing permission for in-app purchases -->
+    <uses-permission android:name="com.android.vending.BILLING" />
+    
     <application
         android:label="Pickoo AI"
         android:name="${applicationName}"
@@ -31,6 +34,12 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        
+        <!-- Google Mobile Ads App ID -->
+        <!-- Replace with your actual AdMob App ID from https://apps.admob.com -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713"/>
     </application>
     <!-- Network permissions and cleartext configuration for HTTP endpoints -->
     <uses-permission android:name="android.permission.INTERNET" />

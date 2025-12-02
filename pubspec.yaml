@@ -11,6 +11,7 @@ dependencies:
     sdk: flutter
   flutter_riverpod: ^2.4.0
   dio: ^5.4.0
+  http: ^1.2.0
   image_picker: ^1.0.7
   cached_network_image: ^3.3.1
   photo_view: ^0.14.0
@@ -22,7 +23,11 @@ dependencies:
   uuid: ^4.4.0
   share_plus: ^7.0.0
   image: ^4.1.7
-  url_launcher: ^6.3.0
+  flutter_image_compress: ^2.3.0  # Fast native image compression
+  url_launcher: ^6.3.0  # For opening payment URLs
+  webview_flutter: ^4.7.0  # For in-app payment flow
+  google_mobile_ads: ^5.1.0  # Google AdMob integration for monetization
+  in_app_purchase: ^3.1.13  # Google Play Billing & App Store in-app purchases
 
   # Placeholder for Firebase core/auth if later integrated
   # firebase_core: ^2.0.0

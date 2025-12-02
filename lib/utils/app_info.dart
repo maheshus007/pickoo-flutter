@@ -1,2 +1,6 @@
 /// Centralized app metadata constants.
-const String appVersion = '0.1.0';
+/// Now managed via AppConfig - this file kept for backwards compatibility.
+import '../config/app_config.dart';
+
+const String appVersion = AppConfig.appVersion;
+const String appName = AppConfig.appName;

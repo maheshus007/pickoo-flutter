@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'config/app_config.dart';
 import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'providers/auth_provider.dart';
@@ -9,9 +10,16 @@ import 'screens/profile_screen.dart';
 import 'screens/settings_screen.dart';
 import 'widgets/bottom_nav.dart';
 import 'utils/theme.dart';
+import 'services/ad_service.dart';
+import 'providers/purchase_provider.dart';
 
 /// Entry point of Pickoo AI Photo Editor.
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Google Mobile Ads SDK
+  await AdService.initialize();
+  
   runApp(const ProviderScope(child: PickooApp()));
 }
 
@@ -31,11 +39,21 @@ class _PickooAppState extends ConsumerState<PickooApp> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Initialize In-App Purchase service
+    Future.microtask(() async {
+      final purchaseService = ref.read(inAppPurchaseServiceProvider);
+      await purchaseService.initialize();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
     final auth = ref.watch(authProvider);
     return MaterialApp(
-      title: 'Pickoo AI',
+      title: AppConfig.appName,
       themeMode: themeMode,
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(),

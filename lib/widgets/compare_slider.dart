@@ -55,6 +55,19 @@ class _CompareSliderState extends State<CompareSlider> with SingleTickerProvider
     return LayoutBuilder(builder: (context, constraints) {
       final width = constraints.maxWidth;
       return GestureDetector(
+        behavior: HitTestBehavior.opaque, // Ensure the entire area is draggable
+        onTapDown: (details) {
+          // Allow tapping to move slider
+          setState(() {
+            _position = (details.localPosition.dx / width).clamp(0.0, 1.0);
+          });
+        },
+        onHorizontalDragStart: (details) {
+          // Initialize drag
+          setState(() {
+            _position = (details.localPosition.dx / width).clamp(0.0, 1.0);
+          });
+        },
         onHorizontalDragUpdate: (d) {
           setState(() {
             _position = (d.localPosition.dx / width).clamp(0.0, 1.0);
@@ -62,11 +75,19 @@ class _CompareSliderState extends State<CompareSlider> with SingleTickerProvider
         },
         onHorizontalDragEnd: (details) {
           // Snap to near edges if close.
-          if (_position < 0.08) _animateTo(0.0); else if (_position > 0.92) _animateTo(1.0);
+          if (_position < 0.08) {
+            _animateTo(0.0);
+          } else if (_position > 0.92) _animateTo(1.0);
         },
         child: Stack(children: [
           // Show AFTER full-size as baseline.
-          Positioned.fill(child: Image.memory(widget.after, fit: BoxFit.cover)),
+          Positioned.fill(
+            child: Image.memory(
+              widget.after,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+            ),
+          ),
           // Overlay BEFORE cropped to slider position but still scaled to container size.
           Positioned(
             left: 0,
@@ -78,6 +99,7 @@ class _CompareSliderState extends State<CompareSlider> with SingleTickerProvider
                 child: Image.memory(
                   widget.before,
                   fit: BoxFit.cover,
+                  alignment: Alignment.center,
                 ),
               ),
             ),
@@ -107,9 +129,7 @@ class _CompareSliderState extends State<CompareSlider> with SingleTickerProvider
               child: _Label(text: widget.beforeLabel),
             ),
             Positioned(
-              // Shift the AFTER label left to avoid overlapping the top-right overlay buttons (e.g. download)
-              // Original was right:12 which collided with external Positioned overlays in parent Stack.
-              right: 60,
+              right: 12,
               top: 12,
               child: _Label(text: widget.afterLabel),
             ),

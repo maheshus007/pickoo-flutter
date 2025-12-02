@@ -1,14 +1,12 @@
 import 'dart:typed_data';
-import 'dart:io' show File, Directory; // For temp file writing on non-web
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image/image.dart' as img;
 import '../models/tool.dart';
 import '../services/api_service.dart';
 import '../services/gallery_service.dart';
 import '../models/gallery_item.dart';
 import '../config/app_config.dart';
+import '../utils/error_display_helper.dart';
 import 'subscription_provider.dart';
 
 /// Holds state for current editing session.
@@ -21,7 +19,6 @@ class ToolState {
   final Tool? previousTool;
   final bool processing;
   final String? error;
-  final bool rawMode; // whether current processing requests raw bytes (no base64)
 
   const ToolState({
     this.selectedTool,
@@ -32,7 +29,6 @@ class ToolState {
     this.previousTool,
     this.processing = false,
     this.error,
-    this.rawMode = false,
   });
 
   ToolState copyWith({
@@ -44,7 +40,6 @@ class ToolState {
     Tool? previousTool,
     bool? processing,
     String? error,
-    bool? rawMode,
   }) => ToolState(
         selectedTool: selectedTool ?? this.selectedTool,
         original: original ?? this.original,
@@ -54,14 +49,13 @@ class ToolState {
         previousTool: previousTool ?? this.previousTool,
         processing: processing ?? this.processing,
         error: error,
-        rawMode: rawMode ?? this.rawMode,
       );
 
   bool get hasResult => result != null;
 }
 
 final apiServiceProvider = Provider<ApiService>((ref) {
-  return ApiService(AppConfig.apiBaseUrl);
+  return ApiService(AppConfig.backendUrl);
 });
 
 final toolStateProvider = NotifierProvider<ToolStateNotifier, ToolState>(() {
@@ -87,11 +81,47 @@ class GalleryNotifier extends Notifier<List<GalleryItem>> {
     state = items;
   }
 
+  /// Add new item to gallery with automatic quota management
   Future<void> add(String tool, Uint8List bytes) async {
-    final item = await _service.create(tool, bytes);
-    // Prepend the new item so latest appears first in gallery
-    state = [item, ...state];
-    await _service.saveAll(state);
+    try {
+      final item = await _service.create(tool, bytes);
+      // Prepend the new item so latest appears first in gallery
+      final newState = [item, ...state];
+      
+      // Save to storage (will auto-cleanup if needed)
+      await _service.saveAll(newState);
+      
+      // Update state only after successful save
+      state = newState;
+      
+    } catch (e) {
+      // Handle QuotaExceededError gracefully
+      if (e.toString().contains('QuotaExceededError') || 
+          e.toString().contains('exceeded the quota')) {
+        
+        // Log the error
+        final errorLog = ErrorDisplayHelper.formatErrorLog(
+          error: e.toString(),
+          tool: tool,
+          operation: 'save_to_gallery',
+          context: {
+            'current_items': state.length,
+            'max_items': 20,
+          },
+        );
+        // ignore: avoid_print
+        print(errorLog);
+        
+        // Reload gallery (emergency cleanup already happened in service)
+        await _load();
+        
+        // Re-throw with user-friendly message
+        throw Exception('Storage quota exceeded. Gallery has been reduced to 10 most recent images. Please clear cache in settings to free up space.');
+      }
+      
+      // For other errors, just rethrow
+      rethrow;
+    }
   }
 
   Future<void> remove(String id) async {
@@ -101,7 +131,12 @@ class GalleryNotifier extends Notifier<List<GalleryItem>> {
 
   Future<void> clear() async {
     state = [];
-    await _service.saveAll(state);
+    await _service.clearAll();
+  }
+
+  /// Get storage statistics
+  Future<Map<String, dynamic>> getStorageStats() async {
+    return await _service.getStorageStats();
   }
 }
 
@@ -129,79 +164,26 @@ class ToolStateNotifier extends Notifier<ToolState> {
   }
 
   Future<void> setOriginal(XFile file) async {
-    // Clean up previous temp compressed file if present
-    if (!kIsWeb) {
-      final prevPath = state.original?.path ?? '';
-      if (prevPath.contains('neuralens_compressed_')) {
-        try { await File(prevPath).delete(); } catch (_) {}
-      }
-    }
-    Uint8List originalBytes = await file.readAsBytes();
-    Uint8List processedBytes = originalBytes;
-    const int maxDim = 1600; // performance ceiling
-    const int jpegQuality = 85;
-    bool wantsPng = false;
+    // OPTIMIZED: Skip slow client-side compression - let backend handle it
+    // Just read the bytes for display, upload the original file
+    
+    Uint8List displayBytes;
     try {
-      final decoded = img.decodeImage(originalBytes);
-      if (decoded != null) {
-        int w = decoded.width;
-        int h = decoded.height;
-        wantsPng = decoded.hasAlpha; // preserve transparency if present
-        if (w > maxDim || h > maxDim) {
-          final scale = w >= h ? maxDim / w : maxDim / h;
-          final newW = (w * scale).round();
-          final newH = (h * scale).round();
-          final resized = img.copyResize(decoded, width: newW, height: newH, interpolation: img.Interpolation.linear);
-          if (wantsPng) {
-            processedBytes = Uint8List.fromList(img.encodePng(resized));
-          } else {
-            processedBytes = Uint8List.fromList(img.encodeJpg(resized, quality: jpegQuality));
-          }
-        } else {
-          // Even if not resized, convert to JPEG to reduce payload (unless already tiny)
-          processedBytes = Uint8List.fromList(
-            wantsPng ? img.encodePng(decoded) : img.encodeJpg(decoded, quality: jpegQuality),
-          );
-        }
-      }
+      displayBytes = await file.readAsBytes();
     } catch (e) {
-      // ignore: avoid_print
-      print('[ToolState] Image compression skipped due to error: $e');
-      processedBytes = originalBytes; // fallback
+      rethrow;
     }
-    // Create a new XFile wrapping processed bytes. For non-web ensure a temp path for File fallback.
-    XFile effectiveFile;
-    if (!kIsWeb) {
-      try {
-        final tmpDir = Directory.systemTemp;
-        final ext = wantsPng ? 'png' : 'jpg';
-        final tmpPath = '${tmpDir.path}/neuralens_compressed_${DateTime.now().millisecondsSinceEpoch}.$ext';
-        await File(tmpPath).writeAsBytes(processedBytes, flush: true);
-        effectiveFile = XFile(tmpPath, name: 'compressed.$ext');
-      } catch (_) {
-        effectiveFile = XFile.fromData(
-          processedBytes,
-          name: wantsPng ? 'compressed.png' : 'compressed.jpg',
-          mimeType: wantsPng ? 'image/png' : 'image/jpeg',
-        );
-      }
-    } else {
-      effectiveFile = XFile.fromData(
-        processedBytes,
-        name: wantsPng ? 'compressed.png' : 'compressed.jpg',
-        mimeType: wantsPng ? 'image/png' : 'image/jpeg',
-      );
-    }
+    
     state = state.copyWith(
-      original: effectiveFile,
-      originalBytes: processedBytes,
-      // Replace old image entirely: clear previous result/tool and any error; stop any ongoing processing
+      original: file, // Store original file reference
+      originalBytes: displayBytes, // Just for display
       result: null,
       previousResult: null,
       previousTool: null,
       processing: false,
       error: null,
     );
+    
     // If a tool is already selected, auto-process the newly uploaded image
     if (state.selectedTool != null) {
       Future.microtask(() => process());
@@ -229,34 +211,54 @@ class ToolStateNotifier extends Notifier<ToolState> {
   final api = ref.read(apiServiceProvider);
     try {
       // All tools now processed via unified /process endpoint.
-  Uint8List bytes = await api.processTool(toolId: tool.id, image: original, rawMode: state.rawMode);
-      // Normalize result dimensions to match original to avoid visual duplicate layering artifacts in CompareSlider.
-      try {
-        if (state.originalBytes != null) {
-          final origImg = img.decodeImage(state.originalBytes!);
-          final resImg = img.decodeImage(bytes);
-          if (origImg != null && resImg != null && (origImg.width != resImg.width || origImg.height != resImg.height)) {
-            // Resize result to match original dimensions using linear interpolation.
-            final resized = img.copyResize(resImg, width: origImg.width, height: origImg.height, interpolation: img.Interpolation.linear);
-            // Preserve PNG if original had alpha; otherwise JPEG for size.
-            final wantsPng = origImg.hasAlpha || resImg.hasAlpha;
-            bytes = Uint8List.fromList(wantsPng ? img.encodePng(resized) : img.encodeJpg(resized, quality: 90));
-          }
-        }
-      } catch (e) {
-        // ignore: avoid_print
-        print('[ToolState] Dimension normalization skipped: $e');
-      }
+      Uint8List bytes = await api.processTool(toolId: tool.id, image: original);
+      
+      // REMOVED: Slow dimension normalization (was causing hang on large images)
+      // Backend already returns properly sized images, no need for client-side resizing
+      
       state = state.copyWith(result: bytes, processing: false);
       // ignore: avoid_print
       print('[ToolState] Process succeeded tool=${tool.id} bytes=${bytes.length}');
-      // Persist to gallery
-  await ref.read(galleryProvider.notifier).add(tool.id, bytes);
+      
+      // Persist to gallery (with quota error handling)
+      try {
+        await ref.read(galleryProvider.notifier).add(tool.id, bytes);
+      } catch (galleryError) {
+        // Log gallery save error but don't fail the entire process
+        final galleryErrorLog = ErrorDisplayHelper.formatErrorLog(
+          error: galleryError.toString(),
+          tool: tool.id,
+          operation: 'save_to_gallery',
+          context: {
+            'result_bytes': bytes.length,
+          },
+        );
+        // ignore: avoid_print
+        print(galleryErrorLog);
+        
+        // Show user-friendly error message but keep the result
+        // User can still download/share even if gallery save failed
+        state = state.copyWith(
+          error: 'Image processed successfully, but gallery save failed: ${galleryError.toString()}',
+        );
+      }
+      
       // Record usage
   ref.read(subscriptionProvider.notifier).recordUsage();
     } catch (e) {
+      // Format error with context for better debugging
+      final errorLog = ErrorDisplayHelper.formatErrorLog(
+        error: e.toString(),
+        tool: tool.id,
+        operation: 'process_image',
+        context: {
+          'has_original': state.original != null,
+          'original_bytes': state.originalBytes?.length ?? 0,
+        },
+      );
       // ignore: avoid_print
-      print('[ToolState] Process failed tool=${tool.id} error=$e');
+      print(errorLog);
+      
       state = state.copyWith(error: e.toString(), processing: false);
     }
   }
@@ -277,6 +279,10 @@ class ToolStateNotifier extends Notifier<ToolState> {
     }
   }
 
+  void clearError() {
+    state = state.copyWith(error: null);
+  }
+
   void reset() {
     state = const ToolState();
   }
@@ -285,10 +291,5 @@ class ToolStateNotifier extends Notifier<ToolState> {
   Future<List<Tool>> fetchAvailableTools() async {
     final api = ref.read(apiServiceProvider);
     return api.fetchTools();
-  }
-
-  void toggleRawMode() {
-    if (state.processing) return; // avoid switching mid-flight
-    state = state.copyWith(rawMode: !state.rawMode);
   }
 }

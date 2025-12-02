@@ -55,20 +55,26 @@ class _GalleryThumb extends ConsumerWidget {
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.black,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(item.tool, style: const TextStyle(color: Colors.white70)),
-            ),
-            Hero(tag: item.id, child: Image.memory(item.bytes, fit: BoxFit.contain)),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4),
-              child: Wrap(
-                spacing: 12,
-                children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(item.tool, style: const TextStyle(color: Colors.white70)),
+              ),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.6,
+                ),
+                child: Hero(tag: item.id, child: Image.memory(item.bytes, fit: BoxFit.contain)),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4),
+                child: Wrap(
+                  spacing: 12,
+                  children: [
                   OutlinedButton.icon(
                     onPressed: () {
                       ref.read(galleryProvider.notifier).remove(item.id);
@@ -94,16 +100,16 @@ class _GalleryThumb extends ConsumerWidget {
                           ),
                         );
                       }
-                      final xfile = XFile.fromData(item.bytes, name: 'neuralens_${item.tool}.png', mimeType: 'image/png');
-                      await Share.shareXFiles([xfile], text: 'Download from NeuraLens (${item.tool})');
+                      final xfile = XFile.fromData(item.bytes, name: 'pickoo_${item.tool}.png', mimeType: 'image/png');
+                      await Share.shareXFiles([xfile], text: 'Download from Pickoo (${item.tool})');
                     },
                     icon: const Icon(Icons.download, color: Colors.white70),
                     label: const Text('Download'),
                   ),
                   OutlinedButton.icon(
                     onPressed: () async {
-                      final xfile = XFile.fromData(item.bytes, name: 'neuralens_${item.tool}.png', mimeType: 'image/png');
-                      await Share.shareXFiles([xfile], text: 'Edited with NeuraLens (${item.tool})');
+                      final xfile = XFile.fromData(item.bytes, name: 'pickoo_${item.tool}.png', mimeType: 'image/png');
+                      await Share.shareXFiles([xfile], text: 'Edited with Pickoo (${item.tool})');
                     },
                     icon: const Icon(Icons.share, color: Colors.white70),
                     label: const Text('Share'),
@@ -118,6 +124,7 @@ class _GalleryThumb extends ConsumerWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

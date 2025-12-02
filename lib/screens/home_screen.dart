@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import '../config/app_config.dart';
 import '../models/tool.dart';
 import '../providers/tool_provider.dart';
 import '../widgets/loading_overlay.dart';
@@ -12,9 +13,12 @@ import '../widgets/compare_slider.dart';
 import '../widgets/neon_card.dart';
 import '../widgets/section_title.dart';
 import '../providers/subscription_provider.dart';
+import '../providers/ad_provider.dart';
+import '../utils/error_display_helper.dart';
 import 'package:share_plus/share_plus.dart';
-// import '../models/subscription_plan.dart';
-import '../services/payment_service.dart';
+import '../models/subscription_plan.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'payment_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -23,10 +27,11 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final toolState = ref.watch(toolStateProvider);
     final notifier = ref.read(toolStateProvider.notifier);
-  final sub = ref.watch(subscriptionProvider);
+    final sub = ref.watch(subscriptionProvider);
+    final bannerAdState = ref.watch(bannerAdProvider);
     return Stack(children: [
-      Scaffold(
-  appBar: AppBar(title: const Text('Pickoo AI')),
+            Scaffold(
+        appBar: AppBar(title: Text(AppConfig.appName)),
         body: Stack(
           children: [
             // Futuristic subtle radial gradient backdrop
@@ -46,13 +51,31 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
             ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: 100, // Add extra bottom padding to prevent overlap with bottom nav bar
+              ),
               children: [
             _HeaderSection(onPick: () async {
+              // Show interstitial ad before image upload for free tier users
+              final adService = ref.read(adServiceProvider);
+              if (adService.shouldShowAds(sub.plan)) {
+                await adService.showInterstitialAd();
+                // Small delay to let ad close properly
+                await Future.delayed(const Duration(milliseconds: 500));
+              }
+              
               final picker = ImagePicker();
               final file = await picker.pickImage(source: ImageSource.gallery);
               if (file != null) {
                 await notifier.setOriginal(file);
+                
+                // Load banner ad after upload for free tier users
+                if (adService.shouldShowAds(sub.plan)) {
+                  ref.read(bannerAdProvider.notifier).loadBannerAd();
+                }
               }
             }, onSample: () async {
               // Load bundled base64 sample image and create a temporary XFile.
@@ -63,7 +86,6 @@ class HomeScreen extends ConsumerWidget {
               final file = await File(filePath).writeAsBytes(bytes, flush: true);
               await notifier.setOriginal(XFile(file.path));
             }),
-            // Raw mode option removed per request.
             // Stable image area: keeps layout position fixed using AnimatedSwitcher + AspectRatio.
             if (toolState.originalBytes != null)
               Padding(
@@ -173,7 +195,7 @@ class HomeScreen extends ConsumerWidget {
             Wrap(
               spacing: 12,
               runSpacing: 12,
-              children: ToolRegistry.tools.map((t) {
+              children: ToolRegistry.enabledTools.map((t) {
                 final selected = toolState.selectedTool?.id == t.id;
                 return NeonCard(
                   key: ValueKey('tool-${t.id}'),
@@ -217,32 +239,19 @@ class HomeScreen extends ConsumerWidget {
                 if (toolState.error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(toolState.error!, style: const TextStyle(color: Colors.redAccent)),
-                        const SizedBox(height: 8),
-                        OutlinedButton.icon(
-                          onPressed: () => notifier.process(),
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
-                        ),
-                      ],
+                    child: ErrorDisplayHelper.buildErrorTile(
+                      error: toolState.error!,
+                      tool: toolState.selectedTool?.name,
+                      onRetry: () => notifier.process(),
+                      onDismiss: () => notifier.clearError(),
                     ),
                   ),
             // Action buttons now appear below stable image container only when a result exists.
-            if (toolState.hasResult && toolState.result != null)
+            if (toolState.hasResult && toolState.result != null) ...[
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Row(
                   children: [
-                    if (toolState.previousResult != null)
-                      OutlinedButton.icon(
-                        onPressed: notifier.revert,
-                        icon: const Icon(Icons.undo, color: Colors.white70),
-                        label: const Text('Revert'),
-                      ),
-                    if (toolState.previousResult != null) const SizedBox(width: 12),
                     OutlinedButton.icon(
                       onPressed: () async => _downloadBytes(
                         context: context,
@@ -265,6 +274,22 @@ class HomeScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              
+              // Show banner ad after processing for free tier users
+              if (sub.plan.adSupported && bannerAdState.isLoaded && bannerAdState.ad != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Container(
+                    height: 50,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[900],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: AdWidget(ad: bannerAdState.ad!),
+                  ),
+                ),
+            ],
               ],
             ),
           ],
@@ -278,22 +303,32 @@ class HomeScreen extends ConsumerWidget {
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: Colors.black.withOpacity(0.85)),
+<<<<<<< HEAD
             child: Align(
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: () async {
                   await PaymentService.startGPayUpi(
-                    context: context,
-                    pa: 'maheshus007@icici',
-                    pn: 'Pickoo AI',
-                    am: '99.00',
-                    tn: 'Pickoo Weekly Subscription',
-                    tid: 'pickoo-${DateTime.now().millisecondsSinceEpoch}',
-                    currency: 'INR',
-                  );
-                },
-                child: const Text('Upgrade', style: TextStyle(color: Colors.white)),
-              ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PaymentScreen(plan: PlansRegistry.week100),
+                        ),
+                      ),
+                      child: const Text('Upgrade', style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                      builder: (context) => PaymentScreen(plan: PlansRegistry.week100),
+                    ),
+                  ),
+                  child: const Text('Upgrade', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+>>>>>>> origin/main
             ),
           ),
         ),
@@ -366,7 +401,7 @@ Future<void> _downloadBytes({
   } else {
     // Fallback: share file (mobile/desktop)
     final xfile = XFile.fromData(bytes, name: filename, mimeType: 'image/png');
-  await Share.shareXFiles([xfile], text: 'Edited with Pickoo');
+    await Share.shareXFiles([xfile], text: 'Edited with Pickoo');
   }
 }
 
@@ -381,7 +416,7 @@ class _HeaderSection extends StatelessWidget {
       children: [
         Text('Welcome!', style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white)),
         const SizedBox(height: 8),
-  Text('Upload a photo, choose an AI tool and let Pickoo enhance it.', style: const TextStyle(color: Colors.white70)),
+        const Text('Upload a photo, choose an AI tool and let Pickoo enhance it.', style: TextStyle(color: Colors.white70)),
         const SizedBox(height: 16),
         Row(
           children: [
