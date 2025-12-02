@@ -1,48 +1,67 @@
 /// Centralized configuration for Pickoo Flutter app.
-/// All environment variables and compile-time constants are defined here.
-/// 
-/// Usage:
-///   - Set values at compile-time using --dart-define flags
-///   - Example: flutter run -d chrome --dart-define=BACKEND_URL=https://api.example.com
-///
-/// Environment Variables:
-///   - BACKEND_URL: Backend API base URL (default: http://localhost:8000)
-///   - ENABLED_TOOLS: Comma-separated list of enabled tool IDs (default: auto_enhance)
-///                    Use 'all' to enable all tools
-///   - APP_VERSION: Application version string (default: 1.0.0+1)
-///   - APP_NAME: Application display name (default: Pickoo AI)
-
+/// Combines environment, backend, payment, and feature flags.
 class AppConfig {
   // Private constructor to prevent instantiation
   AppConfig._();
-  
-  /// Backend API Configuration
-  /// The base URL for the FastAPI backend server.
-  /// Can be overridden at compile-time with --dart-define=BACKEND_URL=...
+
+  // Environment configuration
+  static const String environment = String.fromEnvironment(
+    'ENVIRONMENT',
+    defaultValue: 'production',
+  );
+
+  // Backend API base URL (alias of BACKEND_URL)
   static const String backendUrl = String.fromEnvironment(
     'BACKEND_URL',
-    defaultValue: 'http://localhost:8000',
+    // Default to deployed backend; override via --dart-define as needed
+    defaultValue: 'http://pickoo-backend-new-env.eba-87fqh8rp.ap-south-1.elasticbeanstalk.com',
   );
-  
-  /// Feature Flags - Enabled Tools
-  /// Comma-separated list of tool IDs to enable in the UI.
-  /// Available tools: auto_enhance, background_removal, face_retouch, 
-  ///                  object_eraser, sky_replacement, super_resolution, style_transfer
-  /// Use 'all' to enable all tools.
-  /// Can be overridden with --dart-define=ENABLED_TOOLS=...
+
+  // API timeouts
+  static const int apiTimeoutSeconds = int.fromEnvironment(
+    'API_TIMEOUT_SECONDS',
+    defaultValue: 60,
+  );
+  static const int connectTimeoutMs = 30000;
+  static const int receiveTimeoutMs = 30000;
+
+  // Payment configuration
+  static const String googlePayMerchantId = String.fromEnvironment(
+    'GOOGLE_PAY_MERCHANT_ID',
+    defaultValue: '',
+  );
+  static const String googlePayMerchantName = String.fromEnvironment(
+    'GOOGLE_PAY_MERCHANT_NAME',
+    defaultValue: 'Pickoo AI',
+  );
+  static const String paymentEnvironment = String.fromEnvironment(
+    'PAYMENT_ENVIRONMENT',
+    defaultValue: 'TEST',
+  );
+
+  // Application info
+  static const String appVersion = String.fromEnvironment(
+    'APP_VERSION',
+    defaultValue: '1.0.0+1',
+  );
+  static const String appName = String.fromEnvironment(
+    'APP_NAME',
+    defaultValue: 'Pickoo AI',
+  );
+  static const int maxImageSizeMB = int.fromEnvironment(
+    'MAX_IMAGE_SIZE_MB',
+    defaultValue: 20,
+  );
+
+  // Feature flags (tools)
   static const String enabledTools = String.fromEnvironment(
     'ENABLED_TOOLS',
     defaultValue: 'auto_enhance',
   );
-  
-  /// Individual Tool Flags (can be overridden at compile-time)
-  /// Auto Enhance - Automatic image enhancement
   static const bool enableAutoEnhance = bool.fromEnvironment(
     'ENABLE_AUTO_ENHANCE',
     defaultValue: true,
   );
-  
-  /// Background Removal - Remove background from images
   static const bool enableBackgroundRemoval = bool.fromEnvironment(
     'ENABLE_BACKGROUND_REMOVAL',
     defaultValue: false,
@@ -78,32 +97,6 @@ class AppConfig {
     defaultValue: false,
   );
   
-  /// Application Information
-  /// Application version and build number
-  static const String appVersion = String.fromEnvironment(
-    'APP_VERSION',
-    defaultValue: '1.0.0+1',
-  );
-  
-  /// Application display name
-  static const String appName = String.fromEnvironment(
-    'APP_NAME',
-    defaultValue: 'Pickoo AI',
-  );
-  
-  /// API Timeouts (in seconds)
-  /// Request timeout for API calls
-  static const int apiTimeoutSeconds = int.fromEnvironment(
-    'API_TIMEOUT_SECONDS',
-    defaultValue: 60,
-  );
-  
-  /// Maximum image file size in MB
-  static const int maxImageSizeMB = int.fromEnvironment(
-    'MAX_IMAGE_SIZE_MB',
-    defaultValue: 20,
-  );
-  
   /// Gallery Configuration
   /// Maximum number of items to store in local gallery
   static const int maxGalleryItems = int.fromEnvironment(
@@ -111,18 +104,11 @@ class AppConfig {
     defaultValue: 50,
   );
   
-  /// Development/Debug flags
-  /// Enable debug logging
-  static const bool debugMode = bool.fromEnvironment(
-    'DEBUG_MODE',
-    defaultValue: false,
-  );
-  
-  /// Enable verbose API logging
-  static const bool verboseLogging = bool.fromEnvironment(
-    'VERBOSE_LOGGING',
-    defaultValue: false,
-  );
+  // Debug flags
+  static const bool debugMode = bool.fromEnvironment('DEBUG_MODE', defaultValue: false);
+  static const bool verboseLogging = bool.fromEnvironment('VERBOSE_LOGGING', defaultValue: false);
+  static const bool enablePayments = bool.fromEnvironment('ENABLE_PAYMENTS', defaultValue: true);
+  static const bool enableAIFeatures = bool.fromEnvironment('ENABLE_AI_FEATURES', defaultValue: true);
   
   // Computed properties
   
@@ -173,4 +159,9 @@ class AppConfig {
   static int get maxImageSizeBytes {
     return maxImageSizeMB * 1024 * 1024;
   }
+  
+  // Helper booleans for environment
+  static bool get isDevelopment => environment == 'development';
+  static bool get isStaging => environment == 'staging';
+  static bool get isProduction => environment == 'production';
 }

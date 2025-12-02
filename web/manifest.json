@@ -1,6 +1,6 @@
 {
-    "name": "neuralens_ai_photo_editor_run",
-    "short_name": "neuralens_ai_photo_editor_run",
+    "name": "Pickoo AI",
+    "short_name": "Pickoo AI",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

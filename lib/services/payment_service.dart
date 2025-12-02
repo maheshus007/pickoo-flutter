@@ -1,7 +1,10 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/payment.dart';
 
-/// Service for handling payment operations with backend API.
+/// Service for handling payment operations with backend API and UPI launcher.
 class PaymentService {
   final String baseUrl;
   final Dio _dio;
@@ -13,24 +16,16 @@ class PaymentService {
           receiveTimeout: const Duration(seconds: 30),
         ));
 
-  /// Detect user's currency based on their location (IP-based).
-  /// Returns currency information for displaying prices.
+  // -------- Backend payment APIs (Stripe/Checkout) --------
   Future<CurrencyInfo> detectCurrency() async {
     try {
       final response = await _dio.get('/payment/detect-currency');
       return CurrencyInfo.fromJson(response.data);
     } catch (e) {
-      // Fallback to USD if detection fails
-      return CurrencyInfo(
-        countryCode: 'US',
-        currency: 'usd',
-        symbol: '\$',
-      );
+      return CurrencyInfo(countryCode: 'US', currency: 'usd', symbol: '4');
     }
   }
 
-  /// Create a Stripe Checkout session for subscription purchase.
-  /// Returns checkout URL to redirect user for payment.
   Future<PaymentCheckoutResponse> createCheckoutSession({
     required String userId,
     required String planId,
@@ -39,15 +34,12 @@ class PaymentService {
     String? cancelUrl,
   }) async {
     try {
-      // Auto-detect currency if not provided
       String country = countryCode ?? 'US';
       if (countryCode == null) {
         try {
           final currencyInfo = await detectCurrency();
           country = currencyInfo.countryCode;
-        } catch (_) {
-          // Use default if detection fails
-        }
+        } catch (_) {}
       }
 
       final request = PaymentCheckoutRequest(
@@ -72,17 +64,13 @@ class PaymentService {
     }
   }
 
-  /// Get payment history for a user.
-  /// Requires authentication token.
   Future<List<PaymentRecord>> getPaymentHistory(
     String userId, {
     String? authToken,
   }) async {
     try {
       final options = Options(
-        headers: authToken != null
-            ? {'Authorization': 'Bearer $authToken'}
-            : null,
+        headers: authToken != null ? {'Authorization': 'Bearer $authToken'} : null,
       );
 
       final response = await _dio.get(
@@ -91,9 +79,7 @@ class PaymentService {
       );
 
       final List<dynamic> paymentsJson = response.data['payments'];
-      return paymentsJson
-          .map((json) => PaymentRecord.fromJson(json))
-          .toList();
+      return paymentsJson.map((json) => PaymentRecord.fromJson(json)).toList();
     } on DioException catch (e) {
       throw Exception(
           'Failed to get payment history: ${e.response?.data['detail'] ?? e.message}');
@@ -102,8 +88,6 @@ class PaymentService {
     }
   }
 
-  /// Format price for display in user's currency.
-  /// Takes base USD price and converts to local currency with symbol.
   String formatPrice(double basePriceUsd, CurrencyInfo currencyInfo) {
     final conversionRates = {
       'usd': 1.0,
@@ -135,28 +119,77 @@ class PaymentService {
 
     final rate = conversionRates[currencyInfo.currency.toLowerCase()] ?? 1.0;
     final converted = basePriceUsd * rate;
-
-    // Zero-decimal currencies (no cents)
-    final isZeroDecimal = ['jpy', 'krw', 'idr']
-        .contains(currencyInfo.currency.toLowerCase());
-
-    if (isZeroDecimal) {
-      return '${currencyInfo.symbol}${converted.toStringAsFixed(0)}';
-    } else {
-      return '${currencyInfo.symbol}${converted.toStringAsFixed(2)}';
-    }
+    final isZeroDecimal = ['jpy', 'krw', 'idr'].contains(currencyInfo.currency.toLowerCase());
+    return isZeroDecimal
+        ? '${currencyInfo.symbol}${converted.toStringAsFixed(0)}'
+        : '${currencyInfo.symbol}${converted.toStringAsFixed(2)}';
   }
 
-  /// Check if a payment was successful by session ID.
-  /// Used after returning from payment flow.
   Future<bool> verifyPaymentSuccess(String sessionId) async {
     try {
-      // This would typically call a backend endpoint to verify
-      // For now, we'll implement basic verification
       final response = await _dio.get('/payment/session/$sessionId');
       return response.data['status'] == 'completed';
     } catch (e) {
       return false;
     }
+  }
+
+  // -------- UPI (Google Pay) launcher --------
+  static Future<void> startGPayUpi({
+    required BuildContext context,
+    required String pa,
+    required String pn,
+    required String am,
+    required String tn,
+    required String tid,
+    String? currency,
+  }) async {
+    final params = {
+      'pa': pa,
+      'pn': pn,
+      'am': am,
+      'tn': tn,
+      'tid': tid,
+      'cu': currency ?? 'INR',
+      'url': 'https://codesurge.ai/pickoo',
+    };
+    final query = params.entries
+        .map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .join('&');
+    final genericUpi = Uri.parse('upi://pay?$query');
+    final gpayLegacy1 = Uri.parse('tez://upi/pay?$query');
+    final gpayLegacy2 = Uri.parse('googlepay://upi/pay?$query');
+    final gpayPlayStore = Uri.parse(
+        'https://play.google.com/store/apps/details?id=com.google.android.apps.nbu.paisa.user');
+
+    if (kIsWeb) {
+      _showSnack(context, 'Payments are not supported on web.');
+      return;
+    }
+    if (await _tryLaunchUri(genericUpi)) return;
+    if (await _tryLaunchUri(gpayLegacy1)) return;
+    if (await _tryLaunchUri(gpayLegacy2)) return;
+
+    final openedStore = await launchUrl(gpayPlayStore, mode: LaunchMode.externalApplication);
+    if (!openedStore) {
+      _showSnack(context, 'No UPI app found. Please install Google Pay.');
+    }
+  }
+
+  static Future<bool> _tryLaunchUri(Uri uri) async {
+    try {
+      final can = await canLaunchUrl(uri);
+      if (!can) return false;
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      return ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static void _showSnack(BuildContext context, String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
   }
 }

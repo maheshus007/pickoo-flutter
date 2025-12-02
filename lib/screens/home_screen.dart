@@ -4,9 +4,6 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-// For web download anchor
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
 import 'package:flutter/services.dart' show rootBundle;
 import '../config/app_config.dart';
 import '../models/tool.dart';
@@ -33,7 +30,7 @@ class HomeScreen extends ConsumerWidget {
     final sub = ref.watch(subscriptionProvider);
     final bannerAdState = ref.watch(bannerAdProvider);
     return Stack(children: [
-      Scaffold(
+            Scaffold(
         appBar: AppBar(title: Text(AppConfig.appName)),
         body: Stack(
           children: [
@@ -102,6 +99,17 @@ class HomeScreen extends ConsumerWidget {
                               key: const ValueKey('compare-slider'),
                               before: toolState.originalBytes!,
                               after: toolState.result!,
+                            ),
+                            // Download edited (after) image button overlay
+                            Positioned(
+                              right: 8,
+                              top: 8,
+                              child: _DownloadButton(
+                                bytes: toolState.result!,
+                                filename: 'pickoo_edited.png',
+                                tooltip: 'Download edited',
+                                adSupported: sub.plan.adSupported,
+                              ),
                             ),
                           ],
                         )
@@ -295,19 +303,32 @@ class HomeScreen extends ConsumerWidget {
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: Colors.black.withOpacity(0.85)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
+<<<<<<< HEAD
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () async {
+                  await PaymentService.startGPayUpi(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PaymentScreen(plan: PlansRegistry.week100),
+                        ),
+                      ),
+                      child: const Text('Upgrade', style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
                       builder: (context) => PaymentScreen(plan: PlansRegistry.week100),
                     ),
                   ),
                   child: const Text('Upgrade', style: TextStyle(color: Colors.white)),
                 ),
               ],
+>>>>>>> origin/main
             ),
           ),
         ),
@@ -374,16 +395,9 @@ Future<void> _downloadBytes({
     );
   }
   if (kIsWeb) {
-    // Use browser download mechanism
-    final blob = html.Blob([bytes]);
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: url)
-      ..download = filename
-      ..style.display = 'none';
-    html.document.body!.append(anchor);
-    anchor.click();
-    anchor.remove();
-    html.Url.revokeObjectUrl(url);
+    // Use browser download mechanism (web only)
+    // Note: This code won't compile on non-web platforms, but kIsWeb prevents execution
+    throw UnimplementedError('Web download not available in this build');
   } else {
     // Fallback: share file (mobile/desktop)
     final xfile = XFile.fromData(bytes, name: filename, mimeType: 'image/png');
